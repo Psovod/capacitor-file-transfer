@@ -72,6 +72,8 @@ class FileTransferPlugin : Plugin() {
         keys().forEach { key ->
             when (val value = opt(key)) {
                 is String -> map[key] = arrayOf(value)
+                is Number -> map[key] = arrayOf(value.toString())
+                is Boolean -> map[key] = arrayOf(value.toString())
                 is org.json.JSONArray -> {
                     val values = mutableListOf<String>()
                     for (i in 0 until value.length()) {
@@ -222,7 +224,17 @@ class FileTransferPlugin : Plugin() {
         val mimeType = call.getString("mimeType")
         val fileKey = call.getString("fileKey") ?: "file"
         
-        val httpOptions = createHttpOptions(call, "POST")
+        // For uploads, we want params to be treated as form parameters (multipart), not URL query params
+        // So we extract them from the call matching how createHttpOptions does it, but send them to formParams
+        val paramsMap = JSObject().apply {
+            val params = call.getObject("params") ?: JSObject()
+            params.keys().forEach { key ->
+                 put(key, params.get(key))
+            }
+        }.toMap()
+        
+        // We pass empty params to httpOptions because we are moving them to formParams
+        val httpOptions = createHttpOptions(call, "POST").copy(params = emptyMap())
 
         val options = IONFLTRUploadOptions(
             url = url,
@@ -230,6 +242,7 @@ class FileTransferPlugin : Plugin() {
             chunkedMode = chunkedMode,
             mimeType = mimeType,
             fileKey = fileKey,
+            formParams = paramsMap,
             httpOptions = httpOptions
         )
 
